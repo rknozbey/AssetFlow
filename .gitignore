@@ -1,0 +1,25 @@
+# Build
+bin/
+obj/
+
+# Visual Studio
+.vs/
+
+# VS Code
+.vscode/
+
+# User files
+*.user
+*.suo
+
+# Logs
+*.log
+
+# Environment
+.env
+
+# ASP.NET
+appsettings.Development.json
+
+# Node
+node_modules/
