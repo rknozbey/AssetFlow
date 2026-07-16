@@ -1,3 +1,4 @@
+using AssetFlow.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace AssetFlow.Infrastructure.Data;
@@ -8,4 +9,6 @@ public class AppDbContext : DbContext
         : base(options)
     {
     }
+
+    public DbSet<User> Users => Set<User>();
 }
