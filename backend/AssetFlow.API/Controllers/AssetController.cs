@@ -83,6 +83,34 @@ namespace AssetFlow.API.Controllers
             await _context.SaveChangesAsync();
 
             return Ok(new { Mesaj = $"'{asset.Name}' isimli demirbaş, {user.FirstName} {user.LastName} personeline başarıyla zimmetlendi!" });
+
+        }
+        // 4. Demirbaşı Zimmetten Düşme / İade Uç Noktası (PUT)
+        [HttpPut("unassign/{assetId}")]
+        public async Task<IActionResult> UnassignAsset(Guid assetId)
+        {
+            // 1. Demirbaşı ve üzerindeki personeli bul
+            var asset = await _context.Assets
+                .Include(a => a.User)
+                .FirstOrDefaultAsync(a => a.Id == assetId);
+
+            if (asset == null) 
+                return NotFound("Demirbaş sistemde bulunamadı.");
+
+            // 2. Demirbaş zaten boşta mı kontrol et
+            if (!asset.IsAssigned) 
+                return BadRequest("Bu demirbaş zaten depoda, kimseye zimmetli değil!");
+
+            // Bilgi mesajı için eski personelin adını hafızaya alalım
+            var previousUser = $"{asset.User?.FirstName} {asset.User?.LastName}";
+
+            // 3. İade işlemini gerçekleştir (Bağı kopar)
+            asset.UserId = null;
+            asset.IsAssigned = false;
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new { Mesaj = $"'{asset.Name}' isimli demirbaş {previousUser} personelinden başarıyla teslim alındı ve depoya kaldırıldı." });
         }
     }
 }
