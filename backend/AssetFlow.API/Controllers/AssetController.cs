@@ -112,5 +112,43 @@ namespace AssetFlow.API.Controllers
 
             return Ok(new { Mesaj = $"'{asset.Name}' isimli demirbaş {previousUser} personelinden başarıyla teslim alındı ve depoya kaldırıldı." });
         }
+        // 5. Demirbaş Bilgilerini Güncelleme Uç Noktası (PUT)
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdateAsset(Guid id, [FromBody] UpdateAssetDto request)
+        {
+            var asset = await _context.Assets.FindAsync(id);
+            
+            if (asset == null) 
+                return NotFound("Güncellenmek istenen demirbaş sistemde bulunamadı.");
+
+            // Bilgileri güncelle
+            asset.Name = request.Name;
+            asset.Description = request.Description;
+            asset.SerialNumber = request.SerialNumber;
+            asset.PurchaseDate = request.PurchaseDate;
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new { Mesaj = $"'{asset.Name}' isimli demirbaşın bilgileri başarıyla güncellendi." });
+        }
+
+        // 6. Demirbaşı Sistemden Tamamen Silme Uç Noktası (DELETE)
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteAsset(Guid id)
+        {
+            var asset = await _context.Assets.FindAsync(id);
+
+            if (asset == null) 
+                return NotFound("Silinmek istenen demirbaş sistemde bulunamadı.");
+
+            // Eğer demirbaş birine zimmetliyse silinmesini engelleyelim (Önce iade edilmeli)
+            if (asset.IsAssigned)
+                return BadRequest("Bu demirbaş şu an bir personele zimmetli! Silmeden önce lütfen iade (unassign) işlemini gerçekleştirin.");
+
+            _context.Assets.Remove(asset);
+            await _context.SaveChangesAsync();
+
+            return Ok(new { Mesaj = "Demirbaş sistemden kalıcı olarak silindi." });
+        }
     }
 }
