@@ -13,4 +13,5 @@ public class User : BaseEntity
     public string PasswordHash { get; set; } = string.Empty;
 
     public string Role { get; set; } = "Personel";
+    public ICollection<Asset> Assets { get; set; } = new List<Asset>();
 }

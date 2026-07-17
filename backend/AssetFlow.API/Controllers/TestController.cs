@@ -6,7 +6,7 @@ namespace AssetFlow.API.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize] // BU ETİKET KRİTİKTİR: Sadece geçerli token'ı olanların girmesini sağlar!
+    [Authorize] //  Sadece geçerli token'ı olanların girmesini sağlar!
     public class TestController : ControllerBase
     {
         [HttpGet("kilitli-kapi")]
