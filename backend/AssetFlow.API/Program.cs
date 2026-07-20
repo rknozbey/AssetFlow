@@ -2,6 +2,8 @@ using AssetFlow.Infrastructure.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models; // Swagger için eklendi
+using System.Security.Claims; // RoleClaimType için eklendi
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -12,7 +14,7 @@ Console.WriteLine("Connection String:");
 Console.WriteLine(builder.Configuration.GetConnectionString("DefaultConnection"));
 Console.WriteLine("========================================");
 
-// PostgreSQL Bağlantısı (MigrationsAssembly Eklendi!)
+// PostgreSQL Bağlantısı
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(
         builder.Configuration.GetConnectionString("DefaultConnection"),
@@ -21,34 +23,33 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 // Controller'ları ekle
 builder.Services.AddControllers();
 
-// Swagger
+// Swagger Yapılandırması (JWT Desteği ile)
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
-    c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "AssetFlow API", Version = "v1" });
+
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Description = "JWT Token'ınızı 'Bearer {token}' formatında giriniz. (Örnek: Bearer eyJhbG...)",
         Name = "Authorization",
-        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
-        Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.ApiKey,
         Scheme = "Bearer"
     });
 
-    c.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement()
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
     {
         {
-            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+            new OpenApiSecurityScheme
             {
-                Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                Reference = new OpenApiReference
                 {
-                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                    Type = ReferenceType.SecurityScheme,
                     Id = "Bearer"
-                },
-                Scheme = "oauth2",
-                Name = "Bearer",
-                In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+                }
             },
-            new List<string>()
+            new string[] {}
         }
     });
 });
@@ -72,8 +73,8 @@ builder.Services.AddAuthentication(options =>
         ValidateIssuerSigningKey = true,
         ValidIssuer = jwtSettings["Issuer"],
         ValidAudience = jwtSettings["Audience"],
-        IssuerSigningKey = new SymmetricSecurityKey(
-            Encoding.UTF8.GetBytes(secretKey!))
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey!)),
+        RoleClaimType = ClaimTypes.Role // SİSTEME ROLÜN HANGİ ETİKETTE OLDUĞUNU SÖYLÜYORUZ
     };
 });
 
@@ -88,7 +89,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-// Authentication & Authorization
+// Authentication & Authorization (Sırası çok önemlidir!)
 app.UseAuthentication();
 app.UseAuthorization();
 

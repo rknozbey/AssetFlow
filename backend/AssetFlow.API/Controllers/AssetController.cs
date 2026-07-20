@@ -4,12 +4,13 @@ using AssetFlow.Infrastructure.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 
 namespace AssetFlow.API.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize] // BU KİLİT SAYESİNDE SADECE GİRİŞ YAPMIŞ PERSONELLER DEMİRBAŞ EKLEYEBİLİR
+    [Authorize] 
     public class AssetController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -19,8 +20,33 @@ namespace AssetFlow.API.Controllers
             _context = context;
         }
 
-        // 1. Yeni Demirbaş Ekleme Uç Noktası (POST)
+        [HttpGet("my-assets")]
+        public async Task<IActionResult> GetMyAssets()
+        {
+            var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+            
+            if (string.IsNullOrEmpty(userIdString) || !Guid.TryParse(userIdString, out Guid userId))
+            {
+                return Unauthorized("Kullanıcı kimliği doğrulanamadı.");
+            }
+
+            var myAssets = await _context.Assets
+                .Where(a => a.UserId == userId)
+                .Select(a => new
+                {
+                    a.Id,
+                    a.Name,
+                    a.SerialNumber,
+                    a.Description,
+                    a.PurchaseDate
+                })
+                .ToListAsync();
+
+            return Ok(myAssets);
+        }
+
         [HttpPost]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> CreateAsset([FromBody] CreateAssetDto request)
         {
             var newAsset = new Asset
@@ -29,7 +55,6 @@ namespace AssetFlow.API.Controllers
                 Description = request.Description,
                 SerialNumber = request.SerialNumber,
                 PurchaseDate = request.PurchaseDate
-                // IsAssigned ve IsActive gibi değerler zaten default (false/true) olarak ayarlı
             };
 
             _context.Assets.Add(newAsset);
@@ -38,58 +63,52 @@ namespace AssetFlow.API.Controllers
             return Ok(new { Mesaj = "Demirbaş başarıyla sisteme eklendi!", DemirbasId = newAsset.Id });
         }
 
-        // 2. Sistemdeki Tüm Demirbaşları Listeleme Uç Noktası (GET)
         [HttpGet]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> GetAllAssets()
         {
             var assets = await _context.Assets
-                .Include(a => a.User) // Eğer zimmetliyse, personelin bilgilerini de yanına ekle (Join)
+                .Include(a => a.User)
                 .Select(a => new
                 {
                     a.Id,
                     a.Name,
                     a.SerialNumber,
                     a.IsAssigned,
-                    // Eğer UserId doluysa personelin adını yaz, boşsa "Depoda" yaz
-                   ZimmetDurumu = a.User != null ? $"{a.User.FirstName} {a.User.LastName} üzerine zimmetli" : "Depoda (Boşta)"
+                    ZimmetDurumu = a.User != null ? $"{a.User.FirstName} {a.User.LastName} üzerine zimmetli" : "Depoda (Boşta)"
                 })
                 .ToListAsync();
 
             return Ok(assets);
         }
 
-        // 3. Demirbaşı Personele Zimmetleme Uç Noktası (PUT)
         [HttpPut("assign")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> AssignAsset([FromBody] AssignAssetDto request)
         {
-            // 1. Demirbaşı bul
             var asset = await _context.Assets.FindAsync(request.AssetId);
             if (asset == null) 
                 return NotFound("Demirbaş sistemde bulunamadı.");
 
-            // 2. Personeli bul
             var user = await _context.Users.FindAsync(request.UserId);
             if (user == null) 
                 return NotFound("Personel sistemde bulunamadı.");
 
-            // 3. Demirbaş zaten başkasına verilmiş mi kontrol et
             if (asset.IsAssigned) 
                 return BadRequest("Bu demirbaş zaten birine zimmetli! Önce boşa çıkartmalısınız.");
 
-            // 4. Atama işlemini gerçekleştir
             asset.UserId = request.UserId;
             asset.IsAssigned = true;
 
             await _context.SaveChangesAsync();
 
             return Ok(new { Mesaj = $"'{asset.Name}' isimli demirbaş, {user.FirstName} {user.LastName} personeline başarıyla zimmetlendi!" });
-
         }
-        // 4. Demirbaşı Zimmetten Düşme / İade Uç Noktası (PUT)
+        
         [HttpPut("unassign/{assetId}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> UnassignAsset(Guid assetId)
         {
-            // 1. Demirbaşı ve üzerindeki personeli bul
             var asset = await _context.Assets
                 .Include(a => a.User)
                 .FirstOrDefaultAsync(a => a.Id == assetId);
@@ -97,14 +116,11 @@ namespace AssetFlow.API.Controllers
             if (asset == null) 
                 return NotFound("Demirbaş sistemde bulunamadı.");
 
-            // 2. Demirbaş zaten boşta mı kontrol et
             if (!asset.IsAssigned) 
                 return BadRequest("Bu demirbaş zaten depoda, kimseye zimmetli değil!");
 
-            // Bilgi mesajı için eski personelin adını hafızaya alalım
             var previousUser = $"{asset.User?.FirstName} {asset.User?.LastName}";
 
-            // 3. İade işlemini gerçekleştir (Bağı kopar)
             asset.UserId = null;
             asset.IsAssigned = false;
 
@@ -112,8 +128,9 @@ namespace AssetFlow.API.Controllers
 
             return Ok(new { Mesaj = $"'{asset.Name}' isimli demirbaş {previousUser} personelinden başarıyla teslim alındı ve depoya kaldırıldı." });
         }
-        // 5. Demirbaş Bilgilerini Güncelleme Uç Noktası (PUT)
+        
         [HttpPut("{id}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> UpdateAsset(Guid id, [FromBody] UpdateAssetDto request)
         {
             var asset = await _context.Assets.FindAsync(id);
@@ -121,7 +138,6 @@ namespace AssetFlow.API.Controllers
             if (asset == null) 
                 return NotFound("Güncellenmek istenen demirbaş sistemde bulunamadı.");
 
-            // Bilgileri güncelle
             asset.Name = request.Name;
             asset.Description = request.Description;
             asset.SerialNumber = request.SerialNumber;
@@ -132,8 +148,8 @@ namespace AssetFlow.API.Controllers
             return Ok(new { Mesaj = $"'{asset.Name}' isimli demirbaşın bilgileri başarıyla güncellendi." });
         }
 
-        // 6. Demirbaşı Sistemden Tamamen Silme Uç Noktası (DELETE)
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteAsset(Guid id)
         {
             var asset = await _context.Assets.FindAsync(id);
@@ -141,7 +157,6 @@ namespace AssetFlow.API.Controllers
             if (asset == null) 
                 return NotFound("Silinmek istenen demirbaş sistemde bulunamadı.");
 
-            // Eğer demirbaş birine zimmetliyse silinmesini engelleyelim (Önce iade edilmeli)
             if (asset.IsAssigned)
                 return BadRequest("Bu demirbaş şu an bir personele zimmetli! Silmeden önce lütfen iade (unassign) işlemini gerçekleştirin.");
 

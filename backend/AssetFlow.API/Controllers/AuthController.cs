@@ -40,7 +40,7 @@ namespace AssetFlow.API.Controllers
                 LastName = dto.LastName,
                 Email = dto.Email,
                 PasswordHash = passwordHash,
-                Role = "Personel" // Varsayılan rol
+                Role = "Personel" // Varsayılan rol ataması
             };
 
             _context.Users.Add(newUser);
@@ -80,7 +80,7 @@ namespace AssetFlow.API.Controllers
             {
                 new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
                 new Claim(JwtRegisteredClaimNames.Email, user.Email),
-                new Claim(ClaimTypes.Role, user.Role), // Kullanıcı rolü (Admin/Personel)
+                new Claim(ClaimTypes.Role, user.Role), // Yönetici veya Personel bilgisi
                 new Claim("FirstName", user.FirstName)
             };
 
