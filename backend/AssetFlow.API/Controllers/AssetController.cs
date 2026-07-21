@@ -31,6 +31,7 @@ namespace AssetFlow.API.Controllers
             }
 
             var myAssets = await _context.Assets
+                .Include(a => a.Category) // Kategori ilişkisi eklendi
                 .Where(a => a.UserId == userId)
                 .Select(a => new
                 {
@@ -38,7 +39,8 @@ namespace AssetFlow.API.Controllers
                     a.Name,
                     a.SerialNumber,
                     a.Description,
-                    a.PurchaseDate
+                    a.PurchaseDate,
+                    Kategori = a.Category != null ? a.Category.Name : "Belirtilmemiş" // Kategori adı projeksiyona eklendi
                 })
                 .ToListAsync();
 
@@ -54,7 +56,8 @@ namespace AssetFlow.API.Controllers
                 Name = request.Name,
                 Description = request.Description,
                 SerialNumber = request.SerialNumber,
-                PurchaseDate = request.PurchaseDate
+                PurchaseDate = request.PurchaseDate,
+                CategoryId = request.CategoryId // Yeni eklenen alan
             };
 
             _context.Assets.Add(newAsset);
@@ -69,12 +72,14 @@ namespace AssetFlow.API.Controllers
         {
             var assets = await _context.Assets
                 .Include(a => a.User)
+                .Include(a => a.Category) // Kategori ilişkisi eklendi
                 .Select(a => new
                 {
                     a.Id,
                     a.Name,
                     a.SerialNumber,
                     a.IsAssigned,
+                    Kategori = a.Category != null ? a.Category.Name : "Belirtilmemiş", // Kategori adı eklendi
                     ZimmetDurumu = a.User != null ? $"{a.User.FirstName} {a.User.LastName} üzerine zimmetli" : "Depoda (Boşta)"
                 })
                 .ToListAsync();
@@ -100,6 +105,16 @@ namespace AssetFlow.API.Controllers
             asset.UserId = request.UserId;
             asset.IsAssigned = true;
 
+            // YENİ EKLENEN KISIM: Geçmiş Tablosuna Kayıt (Log) Atıyoruz
+            var historyLog = new AssetHistory
+            {
+                AssetId = asset.Id,
+                UserId = user.Id.ToString(), // HATA BURADA GİDERİLDİ (.ToString() eklendi)
+                ActionType = "Zimmetlendi",
+                ActionDate = DateTime.UtcNow // İşlem zamanı
+            };
+            _context.AssetHistories.Add(historyLog);
+
             await _context.SaveChangesAsync();
 
             return Ok(new { Mesaj = $"'{asset.Name}' isimli demirbaş, {user.FirstName} {user.LastName} personeline başarıyla zimmetlendi!" });
@@ -120,9 +135,23 @@ namespace AssetFlow.API.Controllers
                 return BadRequest("Bu demirbaş zaten depoda, kimseye zimmetli değil!");
 
             var previousUser = $"{asset.User?.FirstName} {asset.User?.LastName}";
+            var previousUserId = asset.UserId; // İlişkiyi koparmadan önce kimde olduğunu hafızaya alıyoruz
 
             asset.UserId = null;
             asset.IsAssigned = false;
+
+            // YENİ EKLENEN KISIM: Geçmiş Tablosuna İade Kaydı Atıyoruz
+            if (previousUserId != null)
+            {
+                var historyLog = new AssetHistory
+                {
+                    AssetId = asset.Id,
+                    UserId = previousUserId.ToString(), // Kimden teslim alındı?
+                    ActionType = "İade Edildi / Depoya Kaldırıldı",
+                    ActionDate = DateTime.UtcNow
+                };
+                _context.AssetHistories.Add(historyLog);
+            }
 
             await _context.SaveChangesAsync();
 
@@ -142,6 +171,7 @@ namespace AssetFlow.API.Controllers
             asset.Description = request.Description;
             asset.SerialNumber = request.SerialNumber;
             asset.PurchaseDate = request.PurchaseDate;
+            asset.CategoryId = request.CategoryId; // Güncelleme işlemine dahil edildi
 
             await _context.SaveChangesAsync();
 
@@ -164,6 +194,38 @@ namespace AssetFlow.API.Controllers
             await _context.SaveChangesAsync();
 
             return Ok(new { Mesaj = "Demirbaş sistemden kalıcı olarak silindi." });
+        }
+
+        // 4. GÜN EKLENTİSİ: ZİMMET GEÇMİŞİ LİSTELEME
+        [HttpGet("{id}/history")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> GetAssetHistory(Guid id)
+        {
+            // Önce demirbaş sistemde var mı diye kontrol ediyoruz
+            var asset = await _context.Assets.FindAsync(id);
+            if (asset == null)
+                return NotFound("Geçmişi aranılan demirbaş sistemde bulunamadı.");
+
+            // Bu demirbaşa ait logları, en yeni tarihli işlem en üstte olacak şekilde çekiyoruz
+            var history = await _context.AssetHistories
+                .Where(h => h.AssetId == id)
+                .OrderByDescending(h => h.ActionDate)
+                .Select(h => new
+                {
+                    IslemTipi = h.ActionType,
+                    Tarih = h.ActionDate,
+                    KullaniciId = h.UserId
+                })
+                .ToListAsync();
+
+            // Demirbaşın temel bilgileriyle birlikte logları dönüyoruz
+            return Ok(new
+            {
+                DemirbasAdi = asset.Name,
+                SeriNumarasi = asset.SerialNumber,
+                ToplamIslemSayisi = history.Count,
+                GecmisKayitlari = history
+            });
         }
     }
 }

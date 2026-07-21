@@ -12,4 +12,6 @@ public class AppDbContext : DbContext
 
     public DbSet<User> Users => Set<User>();
     public DbSet<Asset> Assets => Set<Asset>(); 
+    public DbSet<Category> Categories { get; set; }
+    public DbSet<AssetHistory> AssetHistories { get; set; }
 }

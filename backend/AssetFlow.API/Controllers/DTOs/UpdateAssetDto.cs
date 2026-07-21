@@ -6,5 +6,6 @@ namespace AssetFlow.API.DTOs
         public string? Description { get; set; }
         public string SerialNumber { get; set; } = string.Empty;
         public DateTime PurchaseDate { get; set; }
+        public Guid? CategoryId { get;  set; }
     }
 }
