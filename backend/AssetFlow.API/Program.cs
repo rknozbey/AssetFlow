@@ -78,6 +78,20 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
+// === YENİ EKLENEN KISIM 1: CORS Servisini Tanımlama ===
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowReactApp",
+        policy =>
+        {
+            // Portu 5175 olarak güncelledik
+            policy.WithOrigins("http://localhost:5174", "http://localhost:5173","http://localhost:5175") // React uygulamanızın çalıştığı portu buraya ekleyin
+                  .AllowAnyHeader()
+                  .AllowAnyMethod();
+        });
+});
+// =======================================================
+
 var app = builder.Build();
 
 // HTTP Pipeline
@@ -88,6 +102,10 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+// === YENİ EKLENEN KISIM 2: CORS'u Kullanıma Alma ===
+app.UseCors("AllowReactApp");
+// ====================================================
 
 // Authentication & Authorization (Sırası çok önemlidir!)
 app.UseAuthentication();

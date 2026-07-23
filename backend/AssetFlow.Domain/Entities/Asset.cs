@@ -10,11 +10,14 @@ namespace AssetFlow.Domain.Entities
         public bool IsAssigned { get; set; } = false; // Birine zimmetli mi?
         public bool IsActive { get; set; } = true; // Kullanımdan kaldırıldı mı (hurda/kayıp durumu)?
 
+        // YENİ EKLENEN: React arayüzünden gelen departman bilgisini tutacak alan
+        public string? Department { get; set; }
+
         // User Navigation (Mevcut)
         public Guid? UserId { get; set; } 
         public User? User { get; set; }
 
-        // Category Navigation (Yeni Eklenen)
+        // Category Navigation (Mevcut)
         public Guid? CategoryId { get; set; } // Her demirbaşın bir kategorisi olmalı
         public Category? Category { get; set; }
     }
