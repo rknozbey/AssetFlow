@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { jwtDecode } from 'jwt-decode'; // YENİ: Token içeriğini (Rolleri) okumak için eklendi
+import { jwtDecode } from 'jwt-decode';
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState(''); // Backend'den dönen hataları tutacağımız state
+  const [error, setError] = useState(''); 
   
-  const navigate = useNavigate(); // Yönlendirme fonksiyonunu başlattık
+  const navigate = useNavigate();
 
   const handleLogin = async (e) => {
     e.preventDefault(); 
@@ -19,25 +19,35 @@ const Login = () => {
         email: email,
         password: password
       });
-
-      console.log("Backend'den gelen tam yanıt:", response.data);
       
-      const token = response.data.token; // Token'ı bir değişkene aldık
+      const token = response.data.token; 
       
-      // 1. Backend'den dönen Token'ı localStorage'a kaydediyoruz
+      // 1. Token'ı localStorage'a kaydet
       localStorage.setItem('token', token); 
 
-      // 2. Token'ı çözümlüyor ve içindeki bilgileri (Rol, Email vs.) konsola yazdırıyoruz
+      // 2. Token'ı çözümle
       const decodedToken = jwtDecode(token);
-      console.log("Çözümlenen Token İçeriği (Rol bilgisi burada olacak):", decodedToken);
+      
+      // 3. .NET'in gönderdiği formattan Rol bilgisini güvenli bir şekilde çıkar
+      // Backend şema URL'si kullanıyorsa ilkini, basit 'role' kullanıyorsa ikincisini alır
+      const userRole = decodedToken["http://schemas.microsoft.com/ws/2008/06/identity/claims/role"] || decodedToken.role;
+      
+      // Rolü de diğer bileşenlerde (örn. Sidebar'da) okumak için kaydedelim
+      if (userRole) {
+        localStorage.setItem('role', userRole);
+      }
 
-      // 3. Giriş başarılı olunca kullanıcıyı dashboard'a gönder
+      console.log("Giriş Başarılı! Atanan Rol:", userRole);
+
+      // 4. Dashboard'a yönlendir
       navigate('/dashboard');
       
     } catch (err) {
-      // Eğer backend hata fırlatırsa (Yanlış şifre, 404, 500 vs.) burası çalışır
       console.error("Giriş yapılırken hata oluştu:", err);
-      setError("Giriş başarısız. Lütfen bilgilerinizi veya bağlantıyı kontrol edin.");
+      
+      // Backend'den anlamlı bir hata mesajı geliyorsa onu yakala, yoksa standart mesajı göster
+      const errorMessage = err.response?.data?.message || err.response?.data || "Giriş başarısız. Lütfen bilgilerinizi kontrol edin.";
+      setError(typeof errorMessage === 'string' ? errorMessage : "Bağlantı veya yetkilendirme hatası.");
     }
   };
 
@@ -50,7 +60,6 @@ const Login = () => {
         </div>
         
         <form className="space-y-4" onSubmit={handleLogin}>
-          {/* Hata mesajı varsa ekranda kırmızı renkte göster */}
           {error && (
             <div className="p-3 text-sm text-red-700 bg-red-100 rounded-md">
               {error}
